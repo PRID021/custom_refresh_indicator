@@ -1,8 +1,11 @@
+import 'dart:developer';
+
 import 'package:custom_indicator/custom_refresh_indicator/custom_refresh_indicator.dart';
 import 'package:custom_indicator/custom_refresh_indicator/custom_refresh_indicator_controller.dart';
 import 'package:custom_indicator/custom_refresh_indicator/delegates/indicator_builder_delegate.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RefreshIndicatorState;
+import 'package:monkey_lib/utils/pretty_json.dart';
 import 'delegates/default_indicator_builder_delegate.dart';
 import 'models/custom_indicator_events/indicator_state_change_event.dart';
 import 'models/refresh_indicator_state/index.dart';
@@ -65,6 +68,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
     _onRefresh = null;
     _dragOffset = 0.0;
     _offsetToArmed = widget.offsetToArmed;
+    _onStateChange = widget.onStateChange;
   }
 
   @override
@@ -84,7 +88,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
     if (notification.leading && !_leadingScrollIndicatorVisible) {
       notification.disallowIndicator();
     }
-    if (!_trailingScrollIndicatorVisible) {
+    if (!notification.leading && !_trailingScrollIndicatorVisible) {
       notification.disallowIndicator();
     }
     return true;
@@ -92,6 +96,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
   bool _canStartFromTrigggerEdge(
       ScrollNotification notification, IndicatorTriggerEdge triggerEdge) {
+    Logger.w("${notification.runtimeType}");
     switch (triggerEdge) {
       case IndicatorTriggerEdge.leadingEdge:
         return notification.metrics.extentBefore == 0;
@@ -113,7 +118,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
     final canStart = isValidMode &&
         _controller.enable &&
-        (_controller.state is RefreshIdleState) &&
+        _controller.state.isIdleState &&
         _canStartFromTrigggerEdge(notification, _triggerEdge);
 
     return canStart;
@@ -286,25 +291,25 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
   bool _handelScrollIndicatorNotification(
       ScrollNotification scrollNotification) {
-    if (!notificationPredicate(scrollNotification)) {
-      return false;
-    }
+    Logger.w("ScrollNotification: ${scrollNotification.runtimeType}");
+    if (!notificationPredicate(scrollNotification)) return false;
 
-    if (_isStopDrag) {
-      _controller.shouldStopDrag = false;
-      return false;
-    }
-    if (_controller.shouldStopDrag) {
-      _isStopDrag = true;
-      _controller.shouldStopDrag = false;
-      _hideIndicator().then((_) {
-        _isStopDrag = false;
-      });
-      return false;
-    }
+    // if (_isStopDrag) {
+    //   _controller.shouldStopDrag = false;
+    //   return false;
+    // }
+    // if (_controller.shouldStopDrag) {
+    //   _isStopDrag = true;
+    //   _controller.shouldStopDrag = false;
+    //   _hideIndicator().then((_) {
+    //     _isStopDrag = false;
+    //   });
+    //   return false;
+    // }
 
-    if (_controller.state is RefreshIdleState) {
+    if (_controller.state.isIdleState) {
       bool canStart = _canStart(scrollNotification);
+
       if (canStart) {
         _controller.axisDirection = scrollNotification.metrics.axisDirection;
         _controller.indicatorEdge = _triggerEdge.indicatorEdge;

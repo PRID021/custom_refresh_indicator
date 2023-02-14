@@ -90,12 +90,13 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
 
   IndicatorEdge? get indicatorEdge => _indicatorEdge;
 
+  late bool _shouldStopDrag;
+
   ///
-  /// Variable to check if refresh indicator should stop drag.
+  /// [shouldStopDrag] used to check if refresh indicator should stop dragging.
   /// only true when state is [RefreshDraggingState] and [RefreshArmingState]
   ///
 
-  late bool _shouldStopDrag;
   bool get shouldStopDrag => _shouldStopDrag;
   set shouldStopDrag(bool value) {
     if (_shouldStopDrag == value) return;

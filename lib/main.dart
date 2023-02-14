@@ -1,3 +1,4 @@
+import 'package:custom_indicator/custom_refresh_indicator/custom_refresh_indicator.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -44,21 +45,18 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: Center(
-        child: NotificationListener<ScrollUpdateNotification>(
-          onNotification: (scrollUpdate) {
-            print('scrollDelta: ${scrollUpdate.scrollDelta}');
-            return false;
-          },
+        child: CustomRefreshIndicator(
+          leadingScrollIndicatorVisible: true,
+          trailingScrollIndicatorVisible: true,
           child: ListView.builder(
-            itemBuilder: (context, index) => Text('Item $index'),
-            itemCount: 100,
+            itemBuilder: (context, index) {
+              return ListTile(
+                title: Text("Item $index"),
+              );
+            },
+            itemCount: 30,
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ),
     );
   }

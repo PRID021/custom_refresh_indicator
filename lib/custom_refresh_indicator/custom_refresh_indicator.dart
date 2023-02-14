@@ -2,6 +2,7 @@ import 'package:custom_indicator/custom_refresh_indicator/custom_refresh_indicat
 import 'package:custom_indicator/custom_refresh_indicator/custom_refresh_indicator_state.dart';
 import 'package:flutter/material.dart';
 
+import 'constraint/types/type.dart';
 import 'delegates/indicator_builder_delegate.dart';
 
 class CustomRefreshIndicator extends StatefulWidget {
@@ -13,6 +14,7 @@ class CustomRefreshIndicator extends StatefulWidget {
   final bool? trailingScrollIndicatorVisible;
   final double? offsetToArmed;
   final double? extendContainerPercentageToArmed;
+  final IndicatorStateChangeCallback? onStateChange;
 
   CustomRefreshIndicator({
     super.key,
@@ -24,6 +26,7 @@ class CustomRefreshIndicator extends StatefulWidget {
     this.trailingScrollIndicatorVisible,
     this.offsetToArmed,
     this.extendContainerPercentageToArmed,
+    this.onStateChange,
   }) {
     assert(offsetToArmed == null || extendContainerPercentageToArmed == null,
         "offsetToArmed and extendContainerPercentageToArmed can not be set at the same time");

@@ -1,5 +1,5 @@
 import '../constraint/enums/indicator_edge.dart';
-import '../constraint/enums/indicator_trigger.dart';
+import '../constraint/enums/indicator_trigger_edge.dart';
 
 extension ExtIndicatorTriggerEdge on IndicatorTriggerEdge {
   bool get isLeadingEdge => this == IndicatorTriggerEdge.leadingEdge;
