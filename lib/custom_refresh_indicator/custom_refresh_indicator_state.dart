@@ -24,6 +24,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
   late CustomRefreshIndicatorCallback? _onRefresh;
   late double _dragOffset;
   double? _offsetToArmed;
+  late bool _controllerProvided;
 
   ///
   /// Indicate the indicator currently stopping drag.
@@ -35,7 +36,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
   @override
   void initState() {
     super.initState();
-
+    _controllerProvided = widget.controller != null;
     _controller = widget.controller ??
         CustomRefreshIndicatorController(initState: RefreshIdleState());
 
@@ -66,6 +67,15 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
     _offsetToArmed = widget.offsetToArmed;
   }
 
+  @override
+  void dispose() {
+    _animationController.dispose();
+    if (!_controllerProvided) {
+      _controller.dispose();
+    }
+    super.dispose();
+  }
+
   bool _handelOverScrollIndicator(
       OverscrollIndicatorNotification notification) {
     if (notification.depth != 0) {
@@ -80,7 +90,20 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
     return true;
   }
 
-  //
+  bool _canStartFromTrigggerEdge(
+      ScrollNotification notification, IndicatorTriggerEdge triggerEdge) {
+    switch (triggerEdge) {
+      case IndicatorTriggerEdge.leadingEdge:
+        return notification.metrics.extentBefore == 0;
+
+      case IndicatorTriggerEdge.trailingEdge:
+        return notification.metrics.extentAfter == 0;
+      case IndicatorTriggerEdge.bothEdge:
+        return notification.metrics.extentAfter == 0 ||
+            notification.metrics.extentAfter == 0;
+    }
+  }
+
   bool _canStart(ScrollNotification notification) {
     final isValidMode = (notification is ScrollStartNotification &&
             notification.dragDetails != null) ||
@@ -90,7 +113,8 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
     final canStart = isValidMode &&
         _controller.enable &&
-        (_controller.state is RefreshIdleState);
+        (_controller.state is RefreshIdleState) &&
+        _canStartFromTrigggerEdge(notification, _triggerEdge);
 
     return canStart;
   }
@@ -111,6 +135,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
   void _startRefreshProgress() async {
     try {
+      _dragOffset = 0.0;
       setIndicationState(RefreshSettlingState());
       await _animationController.animateTo(
         1.0,
@@ -144,22 +169,53 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
   bool _handelScrollUpdateNotification(
       ScrollUpdateNotification scrollNotification) {
-    /// RefreshIndicator is on armed state and action not caused by user
+    /// RefreshIndicator is on armed state and notification event trigger not caused by user
     /// the refresh call back should be called.
-    if (_controller.state is RefreshArmingState &&
-        scrollNotification.dragDetails != null) {
+    if (_controller.state.isArmingState &&
+        scrollNotification.dragDetails == null) {
       _startRefreshProgress();
+      return false;
+    }
+
+    if (_controller.state.isDraggingState || _controller.state.isArmingState) {
+      switch (_controller.indicatorEdge) {
+        case IndicatorEdge.leading:
+          if (scrollNotification.metrics.extentBefore > 0.0) {
+            _hideIndicator();
+            break;
+          }
+          _dragOffset -= scrollNotification.scrollDelta!;
+          double? newValue = _calculateDragOffset(
+              scrollNotification.metrics.viewportDimension);
+          if (newValue == null) break;
+          _animationController.value = newValue.clamp(0.0, kPositionLimit);
+          break;
+        case IndicatorEdge.trailing:
+          if (scrollNotification.metrics.extentAfter > 0.0) {
+            _hideIndicator();
+            break;
+          }
+          _dragOffset += scrollNotification.scrollDelta!;
+          double? newValue = _calculateDragOffset(
+              scrollNotification.metrics.viewportDimension);
+          if (newValue == null) break;
+          _animationController.value = newValue.clamp(0.0, kPositionLimit);
+          break;
+        case null:
+          break;
+      }
+      return false;
     }
 
     return false;
   }
 
-  void _calculateDragOffset(double viewportDimension) {
+  double? _calculateDragOffset(double viewportDimension) {
     if (_controller.state.isCancelingState ||
         _controller.state.isRelizingState ||
-        _controller.state.isLoadingState) return;
+        _controller.state.isLoadingState) return null;
     final offsetToArmed = _offsetToArmed;
-    double newValue;
+    double newValue = 0.0;
     if (offsetToArmed == null) {
       final double extendPercentageToArmed =
           widget.extendContainerPercentageToArmed ??
@@ -169,8 +225,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
     if (offsetToArmed != null) {
       newValue = _dragOffset / offsetToArmed;
     }
-
-    if (newValue > kInitialValue && newValue < kArmedFromValue) {}
+    return newValue;
   }
 
   bool _handelOverscrollNotification(
@@ -185,15 +240,35 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
     if (_controller.indicatorEdge == IndicatorEdge.trailing) {
       _dragOffset += scrollNotification.overscroll;
     }
-    _calculateDragOffset(scrollNotification.metrics.viewportDimension);
+    double? newValue =
+        _calculateDragOffset(scrollNotification.metrics.viewportDimension);
+    if (newValue != null) {
+      if (newValue > kInitialValue &&
+          newValue < kArmedFromValue &&
+          !_controller.state.isDraggingState) {
+        setIndicationState(RefreshDraggingState());
+      }
+      if (newValue >= kArmedFromValue && !_controller.state.isArmingState) {
+        setIndicationState(RefreshArmingState());
+      }
+      _animationController.value =
+          newValue.clamp(kInitialValue, kPositionLimit);
+    }
     return false;
   }
 
-  bool _handelScrollEndNotification(ScrollNotification scrollNotification) {
+  bool _handelScrollEndNotification(ScrollEndNotification scrollNotification) {
+    if (_controller.state.isArmingState) {
+      _startRefreshProgress();
+      return false;
+    }
+    _hideIndicator();
     return false;
   }
 
-  bool _handelUserScrollNotification(ScrollNotification scrollNotification) {
+  bool _handelUserScrollNotification(
+      UserScrollNotification scrollNotification) {
+    _controller.scrollDirection = scrollNotification.direction;
     return false;
   }
 
@@ -238,6 +313,8 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
       return false;
     }
 
+// We just handel notification when refresh indicator in RefreshDraggingState and RefreshArmingState
+
     if (!canHandleNotification(scrollNotification)) {
       return false;
     }
@@ -252,6 +329,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
       case ScrollEndNotification:
         return _handelScrollEndNotification(
             scrollNotification as ScrollEndNotification);
+
       case UserScrollNotification:
         return _handelUserScrollNotification(
             scrollNotification as UserScrollNotification);

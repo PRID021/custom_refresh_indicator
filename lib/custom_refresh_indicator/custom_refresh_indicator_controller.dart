@@ -1,4 +1,5 @@
 import 'package:custom_indicator/custom_refresh_indicator/constraint/enums/indicator_edge.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'models/refresh_indicator_state/index.dart';
 
@@ -51,6 +52,19 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
   set enable(bool value) {
     _enable = value;
     notifyListeners();
+  }
+
+  //  define scroll direction when scrollable widget scroll.
+
+  late ScrollDirection _scrollDirection;
+
+  set scrollDirection(ScrollDirection scrollDirection) {
+    _scrollDirection = scrollDirection;
+    notifyListeners();
+  }
+
+  ScrollDirection get scrollDirection {
+    return _scrollDirection;
   }
 
   // define axis direction when scrollable widget scroll.
