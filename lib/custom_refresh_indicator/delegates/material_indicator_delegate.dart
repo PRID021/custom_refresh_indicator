@@ -127,6 +127,9 @@ class MaterialIndicatorDelegate extends IndicatorBuilderDelegate {
                 Text(
                   "scale: ${controller.value.clamp(0.0, 1.0)}",
                 ),
+                Text(
+                  "DragOverOffser : ${controller.dragOverOffset}",
+                ),
               ],
             ),
           )),

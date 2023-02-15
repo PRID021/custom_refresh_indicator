@@ -1,10 +1,11 @@
-import 'dart:developer';
+import 'dart:math';
 
 import 'package:custom_indicator/custom_refresh_indicator/custom_refresh_indicator.dart';
 import 'package:custom_indicator/custom_refresh_indicator/custom_refresh_indicator_controller.dart';
 import 'package:custom_indicator/custom_refresh_indicator/delegates/indicator_builder_delegate.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RefreshIndicatorState;
+import 'package:flutter/rendering.dart';
 import 'package:monkey_lib/utils/pretty_json.dart';
 import 'delegates/default_indicator_builder_delegate.dart';
 import 'models/custom_indicator_events/indicator_state_change_event.dart';
@@ -25,7 +26,8 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
   late IndicatorEdge _triggerEdge;
   late IndicatorStateChangeCallback? _onStateChange;
   late CustomRefreshIndicatorCallback? _onRefresh;
-  late double _dragOffset;
+  late double _animationValueAfterReleasePointer;
+
   double? _offsetToArmed;
   late bool _controllerProvided;
 
@@ -67,7 +69,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
     _controller.indicatorTriggerEdge = _triggerEdge;
     _isStopDrag = false;
     _onRefresh = null;
-    _dragOffset = 0.0;
+
     _offsetToArmed = widget.offsetToArmed;
     _onStateChange = widget.onStateChange;
   }
@@ -111,8 +113,8 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
   void _startRefreshProgress() async {
     try {
-      _dragOffset = 0.0;
       setIndicationState(RefreshSettlingState());
+      _animationValueAfterReleasePointer = _animationController.value;
       await _animationController.animateTo(
         1.0,
         duration: kIndicatorSettlingDuration,
@@ -141,10 +143,21 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
     setIndicationState(RefreshIdleState());
     _controller.indicatorTriggerEdge = _triggerEdge;
+    _controller.dragOverOffset = 0.0;
   }
 
   bool _handelScrollUpdateNotification(
       ScrollUpdateNotification scrollNotification) {
+    if (_animationController.isAnimating) {
+      _animationController.stop();
+    }
+    // if (_controller.scrollDirection == ScrollDirection.reverse &&
+    //     _controller.dragOverOffset > 0) {
+    //   double newDragOverOffset =
+    //       _controller.dragOverOffset - (scrollNotification.scrollDelta ?? 0);
+    //   _controller.dragOverOffset = max(newDragOverOffset, 0.0);
+    // }
+
     return false;
   }
 
@@ -158,21 +171,26 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
       final double extendPercentageToArmed =
           widget.extendContainerPercentageToArmed ??
               kExtendContainerPercentageToArmed;
-      newValue = _dragOffset / (viewportDimension * extendPercentageToArmed);
+      newValue = _controller.dragOverOffset /
+          (viewportDimension * extendPercentageToArmed);
     }
     if (offsetToArmed != null) {
-      newValue = _dragOffset / offsetToArmed;
+      newValue = _controller.dragOverOffset / offsetToArmed;
     }
     return newValue;
   }
 
   bool _handelOverscrollNotification(
       OverscrollNotification scrollNotification) {
+    if (_animationController.isAnimating) {
+      _animationController.stop();
+    }
+
     if (_controller.indicatorTriggerEdge == IndicatorEdge.leading) {
-      _dragOffset -= scrollNotification.overscroll;
+      _controller.dragOverOffset -= scrollNotification.overscroll;
     }
     if (_controller.indicatorTriggerEdge == IndicatorEdge.trailing) {
-      _dragOffset += scrollNotification.overscroll;
+      _controller.dragOverOffset += scrollNotification.overscroll;
     }
     double? newValue =
         _calculateDragOffset(scrollNotification.metrics.viewportDimension);
@@ -185,6 +203,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
       if (newValue >= kArmedFromValue && !_controller.state.isArmingState) {
         setIndicationState(RefreshArmingState());
       }
+
       _animationController.value =
           newValue.clamp(kInitialValue, kPositionLimit);
     }
@@ -234,11 +253,16 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
   Future _hideIndicator() async {
     setIndicationState(RefreshCancelingState());
-    await _animationController.animateTo(
+    _animationValueAfterReleasePointer = _animationController.value;
+    await _animationController
+        .animateTo(
       kInitialValue,
       duration: kIndicatorCancelDuration,
       curve: kCurve,
-    );
+    )
+        .whenComplete(() {
+      _controller.dragOverOffset = 0.0;
+    });
     if (!mounted) return;
     _controller.indicatorTriggerEdge = _triggerEdge;
     setIndicationState(RefreshIdleState());

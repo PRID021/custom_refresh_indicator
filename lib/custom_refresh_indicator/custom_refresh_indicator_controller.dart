@@ -18,6 +18,7 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
     _currentEdge = IndicatorEdge.leading;
     _indicatorTriggerEdge = IndicatorEdge.leading;
     _value = 0.0;
+    _dragOverOffset = 0.0;
     _axisDirection = AxisDirection.down;
   }
 
@@ -158,5 +159,16 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
       case null:
         return IndicatorSide.none;
     }
+  }
+
+  // The variable track the offset of refresh indicator.
+  // this variable is used to calculate the position of refresh indicator.
+
+  late double _dragOverOffset;
+  double get dragOverOffset => _dragOverOffset;
+  set dragOverOffset(double value) {
+    if (value == _dragOverOffset) return;
+    _dragOverOffset = value;
+    notifyListeners();
   }
 }
