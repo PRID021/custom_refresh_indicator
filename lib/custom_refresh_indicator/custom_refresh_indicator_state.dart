@@ -22,7 +22,7 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
   late bool _trailingScrollIndicatorVisible;
   late bool Function(ScrollNotification notification) notificationPredicate;
   late IndicatorEdgeTriggerMode _triggerMode;
-  late IndicatorTriggerEdge _triggerEdge;
+  late IndicatorEdge _triggerEdge;
   late IndicatorStateChangeCallback? _onStateChange;
   late CustomRefreshIndicatorCallback? _onRefresh;
   late double _dragOffset;
@@ -63,7 +63,8 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
       return notification.depth == 0;
     };
     _triggerMode = IndicatorEdgeTriggerMode.onEdge;
-    _triggerEdge = IndicatorTriggerEdge.leadingEdge;
+    _triggerEdge = IndicatorEdge.leading;
+    _controller.indicatorTriggerEdge = _triggerEdge;
     _isStopDrag = false;
     _onRefresh = null;
     _dragOffset = 0.0;
@@ -92,36 +93,6 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
       notification.disallowIndicator();
     }
     return true;
-  }
-
-  bool _canStartFromTrigggerEdge(
-      ScrollNotification notification, IndicatorTriggerEdge triggerEdge) {
-    Logger.w("${notification.runtimeType}");
-    switch (triggerEdge) {
-      case IndicatorTriggerEdge.leadingEdge:
-        return notification.metrics.extentBefore == 0;
-
-      case IndicatorTriggerEdge.trailingEdge:
-        return notification.metrics.extentAfter == 0;
-      case IndicatorTriggerEdge.bothEdge:
-        return notification.metrics.extentAfter == 0 ||
-            notification.metrics.extentAfter == 0;
-    }
-  }
-
-  bool _canStart(ScrollNotification notification) {
-    final isValidMode = (notification is ScrollStartNotification &&
-            notification.dragDetails != null) ||
-        (notification is ScrollUpdateNotification &&
-            notification.dragDetails != null &&
-            _triggerMode == IndicatorEdgeTriggerMode.anyWhere);
-
-    final canStart = isValidMode &&
-        _controller.enable &&
-        _controller.state.isIdleState &&
-        _canStartFromTrigggerEdge(notification, _triggerEdge);
-
-    return canStart;
   }
 
   void setIndicationState(RefreshIndicatorState newState) {
@@ -169,49 +140,11 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
     );
 
     setIndicationState(RefreshIdleState());
-    _controller.indicatorEdge = null;
+    _controller.indicatorTriggerEdge = _triggerEdge;
   }
 
   bool _handelScrollUpdateNotification(
       ScrollUpdateNotification scrollNotification) {
-    /// RefreshIndicator is on armed state and notification event trigger not caused by user
-    /// the refresh call back should be called.
-    if (_controller.state.isArmingState &&
-        scrollNotification.dragDetails == null) {
-      _startRefreshProgress();
-      return false;
-    }
-
-    if (_controller.state.isDraggingState || _controller.state.isArmingState) {
-      switch (_controller.indicatorEdge) {
-        case IndicatorEdge.leading:
-          if (scrollNotification.metrics.extentBefore > 0.0) {
-            _hideIndicator();
-            break;
-          }
-          _dragOffset -= scrollNotification.scrollDelta!;
-          double? newValue = _calculateDragOffset(
-              scrollNotification.metrics.viewportDimension);
-          if (newValue == null) break;
-          _animationController.value = newValue.clamp(0.0, kPositionLimit);
-          break;
-        case IndicatorEdge.trailing:
-          if (scrollNotification.metrics.extentAfter > 0.0) {
-            _hideIndicator();
-            break;
-          }
-          _dragOffset += scrollNotification.scrollDelta!;
-          double? newValue = _calculateDragOffset(
-              scrollNotification.metrics.viewportDimension);
-          if (newValue == null) break;
-          _animationController.value = newValue.clamp(0.0, kPositionLimit);
-          break;
-        case null:
-          break;
-      }
-      return false;
-    }
-
     return false;
   }
 
@@ -235,14 +168,10 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
 
   bool _handelOverscrollNotification(
       OverscrollNotification scrollNotification) {
-    _controller.indicatorEdge ??= scrollNotification.overscroll.isNegative
-        ? IndicatorEdge.trailing
-        : IndicatorEdge.leading;
-
-    if (_controller.indicatorEdge == IndicatorEdge.leading) {
+    if (_controller.indicatorTriggerEdge == IndicatorEdge.leading) {
       _dragOffset -= scrollNotification.overscroll;
     }
-    if (_controller.indicatorEdge == IndicatorEdge.trailing) {
+    if (_controller.indicatorTriggerEdge == IndicatorEdge.trailing) {
       _dragOffset += scrollNotification.overscroll;
     }
     double? newValue =
@@ -274,6 +203,32 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
   bool _handelUserScrollNotification(
       UserScrollNotification scrollNotification) {
     _controller.scrollDirection = scrollNotification.direction;
+    // Logger.w(
+    //     "Handle User Scroll Notification: state.isIdleState: ${_controller.state.isIdleState}, _controller.isScrollingForward: ${_controller.isScrollingForward}, _controller.currentEdge: ${_controller.currentEdge}   ");
+
+    ///
+    /// When refresh indicator can be trigger by user scrool at the leading of scrollable widget
+    ///
+    if (_controller.state.isIdleState &&
+        _controller.isScrollingForward &&
+        _controller.currentEdge == IndicatorEdge.leading) {
+      // Logger.w("set state to RefreshDraggingState");
+      _controller.state = RefreshDraggingState();
+
+      return false;
+    }
+
+    ///
+    /// When refresh indicator can be trigger by user scrool at the trailing of scrollable widget
+    ///
+    if (_controller.state.isIdleState &&
+        _controller.isScrollingReverse &&
+        _controller.currentEdge == IndicatorEdge.trailing) {
+      _controller.state = RefreshDraggingState();
+
+      return false;
+    }
+
     return false;
   }
 
@@ -285,46 +240,39 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
       curve: kCurve,
     );
     if (!mounted) return;
-    _controller.indicatorEdge = null;
+    _controller.indicatorTriggerEdge = _triggerEdge;
     setIndicationState(RefreshIdleState());
   }
 
+  void checkCurrentEdge(ScrollNotification scrollNotification) {
+    if (scrollNotification.metrics.extentBefore == 0) {
+      _controller.currentEdge = IndicatorEdge.leading;
+      return;
+    }
+    if (scrollNotification.metrics.extentAfter == 0) {
+      _controller.currentEdge = IndicatorEdge.trailing;
+      return;
+    }
+    _controller.currentEdge = IndicatorEdge.none;
+  }
+
+  bool _handelScrollStartNotification(
+      ScrollStartNotification scrollNotification) {
+    if (!_controller.isScrollingIdle) return false;
+    return false;
+  }
+
+// RefreshIndicator
   bool _handelScrollIndicatorNotification(
       ScrollNotification scrollNotification) {
-    Logger.w("ScrollNotification: ${scrollNotification.runtimeType}");
     if (!notificationPredicate(scrollNotification)) return false;
-
-    // if (_isStopDrag) {
-    //   _controller.shouldStopDrag = false;
-    //   return false;
-    // }
-    // if (_controller.shouldStopDrag) {
-    //   _isStopDrag = true;
-    //   _controller.shouldStopDrag = false;
-    //   _hideIndicator().then((_) {
-    //     _isStopDrag = false;
-    //   });
-    //   return false;
-    // }
-
-    if (_controller.state.isIdleState) {
-      bool canStart = _canStart(scrollNotification);
-
-      if (canStart) {
-        _controller.axisDirection = scrollNotification.metrics.axisDirection;
-        _controller.indicatorEdge = _triggerEdge.indicatorEdge;
-        setIndicationState(RefreshDraggingState());
-      }
-      return false;
-    }
-
-// We just handel notification when refresh indicator in RefreshDraggingState and RefreshArmingState
-
-    if (!canHandleNotification(scrollNotification)) {
-      return false;
-    }
+    checkCurrentEdge(scrollNotification);
 
     switch (scrollNotification.runtimeType) {
+      case ScrollStartNotification:
+        return _handelScrollStartNotification(
+            scrollNotification as ScrollStartNotification);
+
       case ScrollUpdateNotification:
         return _handelScrollUpdateNotification(
             scrollNotification as ScrollUpdateNotification);

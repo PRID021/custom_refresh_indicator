@@ -1,7 +1,10 @@
 import 'package:custom_indicator/custom_refresh_indicator/constraint/enums/indicator_edge.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'package:monkey_lib/utils/pretty_json.dart';
+import 'constraint/enums/indicator_side.dart';
 import 'models/refresh_indicator_state/index.dart';
+import './extension/index.dart';
 
 class CustomRefreshIndicatorController extends ChangeNotifier {
   CustomRefreshIndicatorController(
@@ -11,6 +14,11 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
     _state = initState;
     _enable = enable ?? true;
     _shouldStopDrag = shouldStopDrag ?? false;
+    _scrollDirection = ScrollDirection.idle;
+    _currentEdge = IndicatorEdge.leading;
+    _indicatorTriggerEdge = IndicatorEdge.leading;
+    _value = 0.0;
+    _axisDirection = AxisDirection.down;
   }
 
   /// the value of refresh indicator.
@@ -39,6 +47,8 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
   }
 
   set state(RefreshIndicatorState newState) {
+    if (newState == _state) return;
+    Logger.w("RefreshIndicatorState changed from $_state to $newState");
     _state = newState;
     notifyListeners();
   }
@@ -59,12 +69,27 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
   late ScrollDirection _scrollDirection;
 
   set scrollDirection(ScrollDirection scrollDirection) {
+    if (scrollDirection == _scrollDirection) return;
+    // Logger.w(
+    //     "ScrollDirection changed from $_scrollDirection to $scrollDirection");
     _scrollDirection = scrollDirection;
     notifyListeners();
   }
 
   ScrollDirection get scrollDirection {
     return _scrollDirection;
+  }
+
+  bool get isScrollingForward {
+    return _scrollDirection == ScrollDirection.forward;
+  }
+
+  bool get isScrollingReverse {
+    return _scrollDirection == ScrollDirection.reverse;
+  }
+
+  bool get isScrollingIdle {
+    return _scrollDirection == ScrollDirection.idle;
   }
 
   // define axis direction when scrollable widget scroll.
@@ -81,14 +106,15 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
   }
 
   // define indicator edge when scrollable widget scroll.
-  late IndicatorEdge? _indicatorEdge;
+  // using when decide the trigger  edge fresh action.
+  late IndicatorEdge _indicatorTriggerEdge;
 
-  set indicatorEdge(IndicatorEdge? value) {
-    _indicatorEdge = value;
+  set indicatorTriggerEdge(IndicatorEdge value) {
+    _indicatorTriggerEdge = value;
     notifyListeners();
   }
 
-  IndicatorEdge? get indicatorEdge => _indicatorEdge;
+  IndicatorEdge get indicatorTriggerEdge => _indicatorTriggerEdge;
 
   late bool _shouldStopDrag;
 
@@ -104,12 +130,33 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void stopDrag() {
-    if (state is RefreshDraggingState || state is RefreshArmingState) {
-      shouldStopDrag = true;
-      return;
+  /// The current edge of the scrollable widget.
+  late IndicatorEdge? _currentEdge;
+
+  set currentEdge(IndicatorEdge? value) {
+    if (value == currentEdge) return;
+    // Logger.w("currentEdge change: from $currentEdge to $value");
+    _currentEdge = value;
+    notifyListeners();
+  }
+
+  IndicatorEdge? get currentEdge => _currentEdge;
+
+  // Using to defien the offset of refresh indicator.
+
+  IndicatorSide get side {
+    final edge = indicatorTriggerEdge;
+    switch (axisDirection) {
+      case AxisDirection.up:
+        return edge.isLeadingEdge ? IndicatorSide.bottom : IndicatorSide.top;
+      case AxisDirection.right:
+        return edge.isLeadingEdge ? IndicatorSide.left : IndicatorSide.right;
+      case AxisDirection.down:
+        return edge.isLeadingEdge ? IndicatorSide.top : IndicatorSide.bottom;
+      case AxisDirection.left:
+        return edge.isLeadingEdge ? IndicatorSide.right : IndicatorSide.left;
+      case null:
+        return IndicatorSide.none;
     }
-    throw StateError(
-        "Can't stop drag when state is not RefreshIdleState or RefreshArmingState");
   }
 }
