@@ -121,6 +121,8 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
         curve: kCurve,
       );
       setIndicationState(RefreshLoadingState());
+      //for test.
+      await Future.delayed(const Duration(milliseconds: 100));
       await _onRefresh?.call();
     } catch (e) {
       if (kDebugMode) {
@@ -151,46 +153,73 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
     if (_animationController.isAnimating) {
       _animationController.stop();
     }
-    // if (_controller.scrollDirection == ScrollDirection.reverse &&
-    //     _controller.dragOverOffset > 0) {
-    //   double newDragOverOffset =
-    //       _controller.dragOverOffset - (scrollNotification.scrollDelta ?? 0);
-    //   _controller.dragOverOffset = max(newDragOverOffset, 0.0);
-    // }
+    if (_controller.state.isDraggingState && _controller.isScrollingReverse) {
+      _controller.dragOverOffset -= scrollNotification.scrollDelta!;
+    }
 
     return false;
+  }
+
+  void _calculateMaxDragOverOffset(double viewportDimension) {
+    if (_controller.maxDragOverOffset != double.infinity) return;
+    final offsetToArmed = _offsetToArmed;
+    if (offsetToArmed == null) {
+      final double extendPercentageToArmed =
+          widget.extendContainerPercentageToArmed ??
+              kExtendContainerPercentageToArmed;
+      _controller.maxDragOverOffset =
+          (viewportDimension * extendPercentageToArmed) *
+              (kPositionLimit / kArmedFromValue);
+    }
+    if (offsetToArmed != null) {
+      _controller.maxDragOverOffset =
+          (kPositionLimit / kArmedFromValue) * offsetToArmed;
+    }
   }
 
   double? _calculateDragOffset(double viewportDimension) {
     if (_controller.state.isCancelingState ||
         _controller.state.isRelizingState ||
         _controller.state.isLoadingState) return null;
+    _calculateMaxDragOverOffset(viewportDimension);
     final offsetToArmed = _offsetToArmed;
     double newValue = 0.0;
     if (offsetToArmed == null) {
       final double extendPercentageToArmed =
           widget.extendContainerPercentageToArmed ??
               kExtendContainerPercentageToArmed;
-      newValue = _controller.dragOverOffset /
-          (viewportDimension * extendPercentageToArmed);
+      newValue = min(
+          _controller.dragOverOffset /
+              (viewportDimension * extendPercentageToArmed),
+          _controller.maxDragOverOffset);
     }
     if (offsetToArmed != null) {
-      newValue = _controller.dragOverOffset / offsetToArmed;
+      newValue = min(_controller.dragOverOffset / offsetToArmed,
+          _controller.maxDragOverOffset);
     }
     return newValue;
   }
 
   bool _handelOverscrollNotification(
       OverscrollNotification scrollNotification) {
+    if (_controller.maxDragOverOffset == double.infinity) {
+      _calculateMaxDragOverOffset(scrollNotification.metrics.viewportDimension);
+    }
+
     if (_animationController.isAnimating) {
       _animationController.stop();
     }
 
     if (_controller.indicatorTriggerEdge == IndicatorEdge.leading) {
       _controller.dragOverOffset -= scrollNotification.overscroll;
+      double newValue =
+          _controller.dragOverOffset - scrollNotification.overscroll;
+      _controller.dragOverOffset = min(_controller.maxDragOverOffset, newValue);
     }
     if (_controller.indicatorTriggerEdge == IndicatorEdge.trailing) {
-      _controller.dragOverOffset += scrollNotification.overscroll;
+      double newValue =
+          _controller.dragOverOffset + scrollNotification.overscroll;
+      _controller.dragOverOffset = min(_controller.maxDragOverOffset, newValue);
     }
     double? newValue =
         _calculateDragOffset(scrollNotification.metrics.viewportDimension);
@@ -252,8 +281,11 @@ class CustomRefreshIndicatorState extends State<CustomRefreshIndicator>
   }
 
   Future _hideIndicator() async {
+    Logger.w("Hide Indicator");
     setIndicationState(RefreshCancelingState());
-    _animationValueAfterReleasePointer = _animationController.value;
+    // Ensure the controll value have match the animation value
+    // especially when use update scroll position to hide indicator.
+    _animationController.value = _controller.value;
     await _animationController
         .animateTo(
       kInitialValue,

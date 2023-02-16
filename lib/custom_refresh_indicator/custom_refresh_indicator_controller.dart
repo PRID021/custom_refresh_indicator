@@ -1,4 +1,5 @@
 import 'package:custom_indicator/custom_refresh_indicator/constraint/enums/indicator_edge.dart';
+import 'package:custom_indicator/custom_refresh_indicator/constraint/values/index.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:monkey_lib/utils/pretty_json.dart';
@@ -35,6 +36,7 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
   set value(double newValue) {
     assert(
         newValue >= 0 && newValue <= 1.5, 'value should be between 0 to 1.5');
+    _calculateDragOverOffset(newValue);
     _value = newValue;
     notifyListeners();
   }
@@ -168,7 +170,36 @@ class CustomRefreshIndicatorController extends ChangeNotifier {
   double get dragOverOffset => _dragOverOffset;
   set dragOverOffset(double value) {
     if (value == _dragOverOffset) return;
+    _calculateControllerValue(value);
     _dragOverOffset = value;
     notifyListeners();
+  }
+
+  // The variable storage the max drag over offset of refresh indicator.
+
+  double? _maxDragOverOffset;
+
+  double get maxDragOverOffset {
+    return _maxDragOverOffset ?? double.infinity;
+  }
+
+  set maxDragOverOffset(double? value) {
+    if (value == _maxDragOverOffset) return;
+    _maxDragOverOffset = value;
+    notifyListeners();
+  }
+
+  // Recalculate the offset of refresh indicator.
+
+  void _calculateDragOverOffset(double newControllerValue) {
+    _dragOverOffset = ((newControllerValue - kInitialValue) /
+            (kPositionLimit - kInitialValue)) *
+        maxDragOverOffset;
+  }
+
+  void _calculateControllerValue(double dragDelta) {
+    if (!state.isDraggingState) return;
+    value = (dragDelta / maxDragOverOffset) * (kPositionLimit - kInitialValue) +
+        kInitialValue;
   }
 }

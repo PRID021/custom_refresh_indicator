@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:monkey_lib/utils/pretty_json.dart';
 import 'dart:math' as math;
 
 import '../constraint/enums/indicator_side.dart';
@@ -90,7 +91,8 @@ class MaterialIndicatorDelegate extends IndicatorBuilderDelegate {
                 color: backgroundColor,
                 elevation: 2.0,
                 child: _InfiniteRotation(
-                  running: withRotation && controller.state.isLoadingState,
+                  running: controller.state.isSettlingState ||
+                      controller.state.isLoadingState,
                   child: builder(context, controller),
                 ),
               ),
@@ -205,6 +207,8 @@ class _PositionedIndicatorContainer extends StatelessWidget {
     final double value =
         controller.state.isRelizingState ? 1.0 : controller.value;
 
+    Logger.w("value: $value");
+
     return Positioned(
       top: isHorizontalAxis
           ? 0
@@ -299,6 +303,8 @@ class _InfiniteRotationState extends State<_InfiniteRotation>
   }
 
   @override
-  Widget build(BuildContext context) =>
-      RotationTransition(turns: _rotationController, child: widget.child);
+  Widget build(BuildContext context) {
+    Logger.w("build RotationTransition wtith running: ${widget.running}");
+    return RotationTransition(turns: _rotationController, child: widget.child);
+  }
 }
